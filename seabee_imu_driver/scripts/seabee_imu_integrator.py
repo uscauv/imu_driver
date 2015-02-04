@@ -71,9 +71,9 @@ class BasicIntegrator(Integrator):
         self.velocity_y += self.acceleration_y*self.delta_t
         self.velocity_z += self.acceleration_z*self.delta_t
 
-        self.position_x += self.acceleration_x*self.delta_t*self.delta_t
-        self.position_y += self.acceleration_y*self.delta_t*self.delta_t
-        self.position_z += self.acceleration_z*self.delta_t*self.delta_t
+        self.position_x += self.velocity_x*self.delta_t
+        self.position_y += self.velocity_y*self.delta_t
+        self.position_z += self.velocity_z*self.delta_t
         self.position_w_x += self.velocity_w_x*self.delta_t
         self.position_w_y += self.velocity_w_y*self.delta_t
         self.position_w_z += self.velocity_w_z*self.delta_t
