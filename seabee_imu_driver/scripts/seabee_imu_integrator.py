@@ -7,15 +7,6 @@ import math
 class Integrator(object):
 
     def instantiate_values(self):
-        pass
-
-    def update_values(self):
-        pass
-
-
-class BasicIntegrator(Integrator):
-
-    def instantiate_values(self):
         self.t_secs_last = None
         self.delta_t = 10
         self.position_x = 0
@@ -33,6 +24,12 @@ class BasicIntegrator(Integrator):
         self.acceleration_x = 0
         self.acceleration_y = 0
         self.acceleration_z = 0
+
+    def update_values(self):
+        pass
+
+
+class BasicIntegrator(Integrator):
 
     def update_values(self, data):
         self.update_direct_values(data)
@@ -80,24 +77,7 @@ class BasicIntegrator(Integrator):
 class LessBasicIntegrator(Integrator):
 
     def instantiate_values(self):
-        self.t_secs_last = None
-        self.delta_t = 10
-        self.position_x = 0
-        self.position_y = 0
-        self.position_z = 0
-        self.position_w_x = 0
-        self.position_w_y = 0
-        self.position_w_z = 0
-        self.velocity_x = 0
-        self.velocity_y = 0
-        self.velocity_z = 0
-        self.velocity_w_x = 0  # angular velocity
-        self.velocity_w_y = 0
-        self.velocity_w_z = 0
-        self.acceleration_x = 0
-        self.acceleration_y = 0
-        self.acceleration_z = 0
-
+        super(LessBasicIntegrator, self).instantiate_values()
         self.x_accel_data = 0
         self.y_accel_data = 0
         self.num_its = 0
