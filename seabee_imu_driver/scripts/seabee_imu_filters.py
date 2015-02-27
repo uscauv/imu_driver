@@ -106,33 +106,49 @@ class KalmanFilter(object):
 
 class ButterworthFilter(object):
 
-    def initialize(self, order=1, nyquist_freq=460800):
+    def initialize(self, order=6, nyquist_freq=.04, analog=Truej;):
         self.b, self.a = scipy.signal.butter(order, nyquist_freq)
-        self.data = []
+        print(self.b)
+        print(self.a)
+        self.x_accel = []
+        self.y_accel = []
+        self.z_accel = []
+        self.time = []
         self.num = 0
         self.seq = 0
-        self.pub = rospy.Publisher("nav_filtered_signals", nav_msgs.msg.Odometry, queue_size=50)
+        self.pub = rospy.Publisher("nav_filtered_signals", sensor_msgs.msg.Imu, queue_size=50)
         rospy.spin()
 
     def log_data(self, data):
-        print("data logged")
-        self.data.append(data.linear_acceleration.x)
+        self.x_accel.append(data.linear_acceleration.x)
+        self.y_accel.append(data.linear_acceleration.y)
+        self.z_accel.append(data.linear_acceleration.z)
+        self.time.append(data.header.stamp)
         self.num += 1
-        if(self.num == 5):
-            self.filter(data)
+        if(self.num == 1000):
+            self.filter()
 
-    def filter(self, input_signal):
-        print("filtered")
-        output_signal = scipy.signal.lfilter(self.b, self.a, input_signal, axis=float)
-        for x in output_signal:
+    def filter(self):
+        print("*******************************************************")
+        x_output = scipy.signal.lfilter(self.b, self.a, self.x_accel)
+        y_output = scipy.signal.lfilter(self.b, self.a, self.y_accel)
+        z_output = scipy.signal.lfilter(self.b, self.a, self.z_accel)
+        iteration = 0
+        for x in x_output:
             msg = nav_msgs.msg.Odometry()
             msg.header.seq = self.seq
-            msg.header.stamp = rospy.Time.now()
+            msg.header.stamp = self.time[iteration]
             msg.header.frame_id = "filter"
-            msg.pose.pose.position.x = x
+            msg.linear_acceleration.x = x
+            msg.linear_acceleration.y = y_output[iteration]
+            msg.linear_acceleration.z = z_output[iteration]
             self.pub.publish(msg)
+            iteration += 1
         self.num = 0
-        self.data = []
+        self.x_accel = []
+        self.y_accel = []
+        self.z_accel = []
+        self.time = []
 
 
 if __name__ == '__main__':

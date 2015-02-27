@@ -2,6 +2,7 @@
 
 import rospy
 import sensor_msgs.msg
+import nav_msgs.msg
 import math
 import tf.transformations
 
@@ -16,7 +17,8 @@ class Analyzer(object):
         self.pub = rospy.Publisher("/odom_analysis", sensor_msgs.msg.Imu, queue_size=10)
 
     def callback(self, data):
-        angles = tf.transformations.euler_from_quaternion([data.orientation.x, data.orientation.y, data.orientation.z, data.orientation.w], axes="sxyz")
+        print(data.pose.pose.position.x)
+        """angles = tf.transformations.euler_from_quaternion([data.orientation.x, data.orientation.y, data.orientation.z, data.orientation.w], axes="sxyz")
         msg = sensor_msgs.msg.Imu()
         msg.header.frame_id = '/base_imu'
         msg.header.stamp = rospy.Time.now()
@@ -31,7 +33,7 @@ class Analyzer(object):
         msg.linear_acceleration.z = data.linear_acceleration.z
         self.pub.publish(msg)
         #print(str(angles[0]/3.16*math.pi) + " " + str(angles[1]/1.56*math.pi/2) + " "  + str(math.sin(angles[0]/3.16*math.pi)) + " " + str(math.sin(angles[1]/1.56*math.pi/2)) + " " + str(9.8*math.sin(angles[0]/3.16*math.pi)) + " " + str(9.8*math.sin(angles[1]/1.56*math.pi/2)))
-        #3print(str(9.8*math.sin(angles[0]/3.16*math.pi)) + " " + str(9.8*math.sin(angles[1]/1.56*math.pi/2)))
+        #3print(str(9.8*math.sin(angles[0]/3.16*math.pi)) + " " + str(9.8*math.sin(angles[1]/1.56*math.pi/2)))"""
 
     def magnitude(self, x, y, z):
         return math.sqrt(pow(x, 2)+pow(y, 2)+pow(z, 2))
@@ -47,9 +49,5 @@ class Analyzer(object):
 if __name__ == "__main__":
     rospy.init_node("data_analyzer")
     analy = Analyzer()
-    rospy.Subscriber("/imu/data", sensor_msgs.msg.Imu, analy.callback)
-    try:
-        while not rospy.is_shutdown():
-            rospy.sleep(100)
-    finally:
-        analy.print_values()
+    rospy.Subscriber("nav_filtered_signals", nav_msgs.msg.Odometry, analy.callback)
+    rospy.spin()
