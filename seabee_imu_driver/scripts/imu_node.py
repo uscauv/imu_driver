@@ -12,10 +12,10 @@ class Imu(object):
     def launch(self):
         self.seq = 0
         rospy.init_node("Imu")
-        self.integrator = seabee_imu_integrator.LessBasicIntegrator()
+        self.integrator = seabee_imu_integrator.BasicIntegrator()
         self.integrator.instantiate_values()
         self.pub = rospy.Publisher("odom", nav_msgs.msg.Odometry, queue_size=50)
-        rospy.Subscriber("/imu/data", sensor_msgs.msg.Imu, self.callback)
+        rospy.Subscriber("nav_filtered_signals", sensor_msgs.msg.Imu, self.callback)
         rospy.spin()
 
     def callback(self, data):

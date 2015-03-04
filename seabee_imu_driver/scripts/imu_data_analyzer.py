@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+##  DEFUNCT AND NOT CURRENTLY USED FOR ANYTHING
+
 import rospy
 import sensor_msgs.msg
 import nav_msgs.msg

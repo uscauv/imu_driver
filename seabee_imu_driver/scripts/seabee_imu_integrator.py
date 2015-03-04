@@ -2,6 +2,7 @@
 
 import tf.transformations
 import math
+import imu_data_logger
 
 
 class Integrator(object):
