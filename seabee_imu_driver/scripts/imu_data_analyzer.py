@@ -19,23 +19,14 @@ class Analyzer(object):
         self.pub = rospy.Publisher("/odom_analysis", sensor_msgs.msg.Imu, queue_size=10)
 
     def callback(self, data):
-        print(data.pose.pose.position.x)
-        """angles = tf.transformations.euler_from_quaternion([data.orientation.x, data.orientation.y, data.orientation.z, data.orientation.w], axes="sxyz")
-        msg = sensor_msgs.msg.Imu()
-        msg.header.frame_id = '/base_imu'
-        msg.header.stamp = rospy.Time.now()
-        #msg.orientation.x = 9.8*math.sin(2*math.pi*math.fabs(angles[0])/3.14)
-        #msg.orientation.y = 9.8*math.sin(2*math.pi*math.fabs(angles[1])/1.56)
-        #msg.orientation.z = 9.8*math.sin(2*math.pi*math.fabs(angles[2])/3.13)
-        msg.orientation.x = angles[0]
-        msg.orientation.y = angles[1]
-        msg.orientation.z = angles[2]
-        msg.linear_acceleration.x = data.linear_acceleration.x
-        msg.linear_acceleration.y = data.linear_acceleration.y
-        msg.linear_acceleration.z = data.linear_acceleration.z
-        self.pub.publish(msg)
-        #print(str(angles[0]/3.16*math.pi) + " " + str(angles[1]/1.56*math.pi/2) + " "  + str(math.sin(angles[0]/3.16*math.pi)) + " " + str(math.sin(angles[1]/1.56*math.pi/2)) + " " + str(9.8*math.sin(angles[0]/3.16*math.pi)) + " " + str(9.8*math.sin(angles[1]/1.56*math.pi/2)))
-        #3print(str(9.8*math.sin(angles[0]/3.16*math.pi)) + " " + str(9.8*math.sin(angles[1]/1.56*math.pi/2)))"""
+        x = data.orientation.x
+        y = data.orientation.y
+        z = data.orientation.z
+        w = data.orientation.w
+        # y =2*(y*z+x*w)
+        # x = 2*(y*w-x*z)
+        # z = (x*x+y*y-z*z-w*w)
+        print(2*(y*z-x*w)*9.81)
 
     def magnitude(self, x, y, z):
         return math.sqrt(pow(x, 2)+pow(y, 2)+pow(z, 2))
@@ -51,5 +42,5 @@ class Analyzer(object):
 if __name__ == "__main__":
     rospy.init_node("data_analyzer")
     analy = Analyzer()
-    rospy.Subscriber("nav_filtered_signals", nav_msgs.msg.Odometry, analy.callback)
+    rospy.Subscriber("imu/data", sensor_msgs.msg.Imu, analy.callback)
     rospy.spin()

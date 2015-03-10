@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
-import tf.transformations
 import math
-import imu_data_logger
 
 
 class Integrator(object):
@@ -39,7 +37,7 @@ class BasicIntegrator(Integrator):
             self.t_nsecs_last = self.t_nsecs
             return
         else:
-            self.delta_t = (self.t_secs-self.t_secs_last) + (self.t_nsecs-self.t_nsecs_last)/pow(10, 9)
+            self.delta_t = (self.t_secs-self.t_secs_last) + (self.t_nsecs-self.t_nsecs_last)*pow(10, -9)
             self.t_secs_last = self.t_secs
             self.t_nsecs_last = self.t_nsecs
         self.update_interpreted_values()
@@ -47,7 +45,7 @@ class BasicIntegrator(Integrator):
     def update_direct_values(self, data):
         self.t_secs = data.header.stamp.secs
         self.t_nsecs = data.header.stamp.nsecs
-        self.acceleration_x = data.linear_acceleration.x  # note that these include the accleration of gravity
+        self.acceleration_x = data.linear_acceleration.x 
         self.acceleration_y = data.linear_acceleration.y
         self.acceleration_z = data.linear_acceleration.z-9.8
         self.velocity_w_x = data.angular_velocity.x
@@ -111,19 +109,8 @@ class LessBasicIntegrator(Integrator):
         self.orientation_w = data.orientation.w
 
     def update_interpreted_values(self, data):
-        self.account_for_gravity(data)
         self.filter_noisy_data()
         self.integrate()
-
-    def account_for_gravity(self, data):
-        angles = tf.transformations.euler_from_quaternion([data.orientation.x, data.orientation.y, data.orientation.z, data.orientation.w], axes="sxyz")
-        self.acceleration_x -= math.fabs(9.8*math.sin(angles[1]/1.56*math.pi/2))
-        self.acceleration_y -= math.fabs(9.8*math.sin(angles[0]/3.16*math.pi))
-        self.x_accel_data += self.acceleration_x
-        self.y_accel_data += self.acceleration_y
-        self.num_its += 1
-        #print "{0:10f}  {1:10f}".format(self.acceleration_x, self.acceleration_y)
-        #print(str(self.x_accel_data) + " " + str(self.y_accel_data) + " " + str(self.num_its))
 
     def filter_noisy_data(self):
         if(math.fabs(self.acceleration_x) < .0015):

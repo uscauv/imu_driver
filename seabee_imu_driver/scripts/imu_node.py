@@ -20,21 +20,21 @@ class Imu(object):
 
     def callback(self, data):
         self.integrator.update_values(data)
-        odom_msg = self.create_odom_msg()
+        odom_msg = self.create_odom_msg(data)
         self.pub.publish(odom_msg)
 
-    def create_odom_msg(self):
+    def create_odom_msg(self, data):
         odom_msg = nav_msgs.msg.Odometry()
-        self.fill_odom_msg_header(odom_msg)
+        self.fill_odom_msg_header(odom_msg, data)
         self.fill_odom_msg_pose(odom_msg)
         self.fill_odom_msg_twist(odom_msg)
         odom_msg.child_frame_id = "seabee_base"
         return odom_msg
 
-    def fill_odom_msg_header(self, msg):
+    def fill_odom_msg_header(self, msg, data):
         msg.header.seq = self.seq
         self.seq += 1
-        msg.header.stamp = rospy.Time.now()
+        msg.header.stamp = data.header.stamp
         msg.header.frame_id = "odom"
 
     def fill_odom_msg_pose(self, msg):
