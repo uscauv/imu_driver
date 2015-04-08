@@ -3,26 +3,33 @@
 import rospy
 import sensor_msgs.msg
 import scipy.signal
-import sys
+import copy
 
 
 class FilterStack(object):
 
     def initialize(self):
-        self.filters = self.initialize_filters()
-        self.logger = Logger().initialize()
+        self.filter_width = 1000
+        self.logger = Logger()
+        self.logger.initialize()
+        self.filters = self.initialize_filters(filter_width=self.filter_width)
+        self.pub = rospy.Publisher("nav_filtered_signals/filter_stack", sensor_msgs.msg.Imu, queue_size=2000)
+        self.seq = 0
         while not rospy.is_shutdown():
             if(self.logger.length() != 0):
                 self.filter(self.logger.get_next_message_group())
             rospy.sleep(1)
 
-    def initialize_filters(self):
+    def initialize_filters(self, filter_width):
         filter_list = []
-        butterworth_filter = ButterworthFilter().initialize()
-        moving_average_filter = MovingAverageFilter().initialize()
+        butterworth_filter = ButterworthFilter()
+        butterworth_filter.initialize()
+        moving_average_filter = MovingAverageFilter()
+        moving_average_filter.initialize(filter_width)
 
         filter_list.append(moving_average_filter)
-        filter_list.append(butterworth_filter)
+        #fa
+        #filter_list.append(butterworth_filter)
 
         return filter_list
 
@@ -32,11 +39,11 @@ class FilterStack(object):
         self.construct_and_send_messages(output)
 
     def prepare_data(self, data):
-        return self.remove_gravity_from_data(data)
+        prepared_data = self.remove_gravity_from_data(data)
+        return prepared_data
 
     def remove_gravity_from_data(self, data):
-        for index in range(1000, len(data)-1):
-            data_point = data[index]
+        for data_point in data:
             x1 = data_point.orientation.x
             y1 = data_point.orientation.y
             z1 = data_point.orientation.z
@@ -44,49 +51,42 @@ class FilterStack(object):
             x = 9.81*2*(y1*w1-x1*z1)
             y = 9.81*-2*(x1*w1+y1*z1)
             z = 9.81*(x1*x1+y1*y1-z1*z1-w1*w1)
-            data[index].linear_acceleration.x = data_point.linear_acceleration.x+x
-            data[index].linear_acceleration.y = data_point.linear_acceleration.y+y
-            data[index].linear_acceleration.z = data_point.linear_acceleration.z+z
+            data_point.linear_acceleration.x = data_point.linear_acceleration.x+x
+            data_point.linear_acceleration.y = data_point.linear_acceleration.y+y
+            data_point.linear_acceleration.z = data_point.linear_acceleration.z+z
         return data
 
     def apply_filters(self, data):
         for curr_filter in self.filters:
-            data  = curr_filter.filter(data)
+            data = curr_filter.apply_filter(data)
         return data
 
     def construct_and_send_messages(self, data):
-        for index in range(500, 1499):
-            data_point = data[index]
-            msg = sensor_msgs.msg.Imu()
-            msg.header.seq = self.seq
-            msg.header.stamp = data_point[3]
-            msg.header.frame_id = "filter"
-            msg.linear_acceleration.x = data_point[0]  # if (abs(data_point[0]) > .02) else 0
-            msg.linear_acceleration.y = data_point[1]
-            msg.linear_acceleration.z = data_point[2]
-            print(data_point[0])
-            self.pub.publish(msg)
+        for data_point in data[50:150]:
+            data_point.header.frame_id = "felter"
+            data_point.header.seq = self.seq
+            self.pub.publish(data_point)
             self.seq += 1
-        
 
 
 class ButterworthFilter(object):
 
-    def initialize(self, order=6, cutoff_freq=.01, manual_data_feed=False):
+    def initialize(self, order=4, cutoff_freq=.01, stand_alone=False, message_pack_size=2000, message_pack_update_size=1000):
         self.b, self.a = scipy.signal.butter(order, cutoff_freq)
-        self.logger = Logger()
-        self.logger.initialize()
-        self.seq = 0 #used to tag messages so they can be put in the right order later
+        self.message_pack_size = message_pack_size
+        self.message_pack_update_size = message_pack_update_size
+        self.seq = 0
         self.pub = rospy.Publisher("nav_filtered_signals/butterworth", sensor_msgs.msg.Imu, queue_size=2000)
-        if not manual_data_feed:
+        if stand_alone:
+            self.logger = Logger()
+            self.logger.initialize()
             while not rospy.is_shutdown():
                 if(self.logger.length() != 0):
                     self.filter(self.logger.get_next_message_group(), manual_data_feed)
                 rospy.sleep(1)
 
-    def filter(self, data, manual_data_feed):
-        if not manual_data_feed:
-            data = self.prepare_data(data)
+    def filter(self, data):
+        data = self.prepare_data(data)
         output = self.apply_filter(data)
         self.construct_and_send_messages(output)
 
@@ -124,22 +124,21 @@ class ButterworthFilter(object):
         x = []
         y = []
         z = []
-        time = []
         for data_point in data:
             x.append(data_point.linear_acceleration.x)
             y.append(data_point.linear_acceleration.y)
             z.append(data_point.linear_acceleration.z)
-            time.append(data_point.header.stamp)
         x_output = scipy.signal.lfilter(self.b, self.a, x)
         y_output = scipy.signal.lfilter(self.b, self.a, y)
         z_output = scipy.signal.lfilter(self.b, self.a, z)
-        return_data = []
-        for index in range(0,len(x_output)):
-            return_data.append((x_output[index], y_output[index], z_output[index], time[index]))
-        return return_data
+        for index in range(0, len(data)):
+            data[index].linear_acceleration.x = x_output[index]
+            data[index].linear_acceleration.y = y_output[index]
+            data[index].linear_acceleration.z = z_output[index]
+        return data
 
     def construct_and_send_messages(self, data):
-        for index in range(500, 1499):
+        for index in range(500, 1500):
             data_point = data[index]
             msg = sensor_msgs.msg.Imu()
             msg.header.seq = self.seq
@@ -155,17 +154,16 @@ class ButterworthFilter(object):
 
 class MovingAverageFilter(object):
 
-    def initialize(self, average_width=50, feed_to_filter=None):
+    def initialize(self, average_width=50, stand_alone=False):
         self.logger = Logger()
         self.logger.initialize()
         self.seq = 0
-        if(feed_to_filter is not None):
-            self.data_to_pass_on = []
         self.pub = rospy.Publisher("nav_filtered_signals/moving_average", sensor_msgs.msg.Imu, queue_size=2000)
-        while not rospy.is_shutdown():
-            if(self.logger.length() != 0):
-                self.filter(self.logger.get_next_message_group(), feed_to_filter)
-            rospy.sleep(1)
+        if stand_alone:
+            while not rospy.is_shutdown():
+                if(self.logger.length() != 0):
+                    self.filter(self.logger.get_next_message_group())
+                rospy.sleep(1)
 
     def filter(self, data, feed_to_filter):
         data = self.prepare_data(data)
@@ -200,23 +198,22 @@ class MovingAverageFilter(object):
         x = []
         y = []
         z = []
-        time = []
-        for index in range(500, 1499):
-            data_point = data[index]
+        for index in range(50, 150):
             x_avg = sum(point.linear_acceleration.x for point in data[index-50:index+50])/100
             y_avg = sum(point.linear_acceleration.y for point in data[index-50:index+50])/100
             z_avg = sum(point.linear_acceleration.z for point in data[index-50:index+50])/100
             x.append(x_avg)
             y.append(y_avg)
             z.append(z_avg)
-            time.append(data[index].header.stamp)
-        return_data = []
-        for index in range(0, len(x)):
-            return_data.append((x[index], y[index], z[index], time[index]))
-        return return_data
+        for index in range(50, 150):
+            data[index].linear_acceleration.x = x[index-50] if (x[index-50] > .05 or x[index-50] < -.05) else 0
+            data[index].linear_acceleration.y = y[index-50] if (abs(y[index-50]) > .02) else 0
+            data[index].linear_acceleration.z = z[index-50] if (abs(z[index-50]) > .02) else 0
+        return data
 
     def construct_and_send_messages(self, data):
-        for data_point in data:
+        for data_point in data[500:1499]:
+            print(len(data))
             msg = sensor_msgs.msg.Imu()
             msg.header.seq = self.seq
             msg.header.stamp = data_point[3]
@@ -230,7 +227,7 @@ class MovingAverageFilter(object):
 
 class Logger(object):
 
-    def initialize(self, initial_message_pack_size=2000, message_pack_update_size=1000):
+    def initialize(self, initial_message_pack_size=200, message_pack_update_size=100):
         self.data_list = []
         self.current_message_pack = []
         self.iteration = 0
@@ -245,7 +242,7 @@ class Logger(object):
         if((self.iteration == self.message_pack_update_size and not self.first_iteration) or (self.first_iteration and self.iteration == self.initial_message_pack_size)):
             self.iteration = 0
             self.first_iteration = False
-            self.data_list.append(self.current_message_pack)
+            self.data_list.append(copy.deepcopy(self.current_message_pack))
             self.current_message_pack = self.current_message_pack[self.message_pack_update_size:self.initial_message_pack_size]
 
     def get_next_message_group(self):
@@ -258,13 +255,6 @@ class Logger(object):
 
 
 if __name__ == '__main__':
-    if(sys.argv[1] == "moving_average"):
-        rospy.init_node("seabee_imu_moving_average_filter")
-        butterworth_filter = ButterworthFilter()
-        butterworth_filter.initialize(manual_data_feed=True)
-        moving_average_filter = MovingAverageFilter()
-        moving_average_filter.initialize(feed_to_filter=butterworth_filter)
-    if(sys.argv[1] == "butterworth"):
-        rospy.init_node("seabee_imu_butterworth_filter")
-        butterworth_filter = ButterworthFilter()
-        butterworth_filter.initialize()
+        rospy.init_node("seabee_imu_filter")
+        filter_stack = FilterStack()
+        filter_stack.initialize()

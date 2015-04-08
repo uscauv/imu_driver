@@ -23,8 +23,8 @@ class Analyzer(object):
         y = data.orientation.y
         z = data.orientation.z
         w = data.orientation.w
-        # y =2*(y*z+x*w)
         # x = 2*(y*w-x*z)
+        # y =2*(y*z+x*w)
         # z = (x*x+y*y-z*z-w*w)
         print(2*(y*z-x*w)*9.81)
 

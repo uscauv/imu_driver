@@ -5,6 +5,7 @@ import sensor_msgs.msg
 import nav_msgs.msg
 
 import seabee_imu_integrator
+from seabee_imu_driver.srv import *
 
 
 class Imu(object):
@@ -12,10 +13,11 @@ class Imu(object):
     def launch(self):
         self.seq = 0
         rospy.init_node("Imu")
-        self.integrator = seabee_imu_integrator.BasicIntegrator()
+        self.integrator = seabee_imu_integrator.TrapezoidalIntegrator()
         self.integrator.instantiate_values()
         self.pub = rospy.Publisher("odom", nav_msgs.msg.Odometry, queue_size=50)
-        rospy.Subscriber("nav_filtered_signals", sensor_msgs.msg.Imu, self.callback)
+        rospy.Service("reset_odom", SeabeeResetOdom, self.reset_handle)
+        rospy.Subscriber("nav_filtered_signals/filter_stack", sensor_msgs.msg.Imu, self.callback)
         rospy.spin()
 
     def callback(self, data):
@@ -56,7 +58,8 @@ class Imu(object):
         msg.twist.twist.angular.z = self.integrator.velocity_w_z
         #covariance ignored (left at default [0])
 
-
+    def reset_handle(self, msg):
+        self.integrator.instantiate_values()
 
 if __name__ == "__main__":
     imu = Imu()

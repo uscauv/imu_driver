@@ -8,6 +8,7 @@ find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   rospy
   xsens_driver
+  message_generation
 )
 
 ## System dependencies are found with CMake's conventions
@@ -56,7 +57,10 @@ find_package(catkin REQUIRED COMPONENTS
 #   Service1.srv
 #   Service2.srv
 # )
-
+add_service_files(
+    FILES
+    SeabeeResetOdom.srv
+)
 ## Generate actions in the 'action' folder
 # add_action_files(
 #   FILES
@@ -69,7 +73,10 @@ find_package(catkin REQUIRED COMPONENTS
 #   DEPENDENCIES
 #   nav_msgs
 # )
-
+generate_messages(
+    DEPENDENCIES
+    std_msgs
+)
 ###################################
 ## catkin specific configuration ##
 ###################################
