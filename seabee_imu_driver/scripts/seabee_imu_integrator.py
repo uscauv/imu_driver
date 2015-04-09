@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 import math
+import geometry_msgs.msg
+import rospy
 
 
 class Integrator(object):
@@ -140,22 +142,24 @@ class TrapezoidalIntegrator(Integrator):
 
     def instantiate_values(self):
         super(TrapezoidalIntegrator, self).instantiate_values()
-        self.last_msg = None
+        rospy.Subscriber("/cmd_vel", geometry_msgs.msg.Twist, self.handle_vel_msg)
+        self.last_odom_msg = None
+        self.last_cmd_vel_msg = None
 
     def update_values(self, data):
-        if(self.last_msg is None):
-            self.last_msg = data
+        if(self.last_odom_msg is None):
+            self.last_odom_msg = data
             return
         self.integrate(data)
         self.drift_filter_v2(data)
-        self.last_msg = data
+        self.last_odom_msg = data
 
     def integrate(self, data):
-        delta_t = 1.0*data.header.stamp.secs-1.0*self.last_msg.header.stamp.secs+1.0*(data.header.stamp.nsecs-self.last_msg.header.stamp.nsecs)*pow(10, -9)
+        delta_t = 1.0*data.header.stamp.secs-1.0*self.last_odom_msg.header.stamp.secs+1.0*(data.header.stamp.nsecs-self.last_odom_msg.header.stamp.nsecs)*pow(10, -9)
         last_velocity = (self.velocity_x, self.velocity_y, self.velocity_z)
-        self.velocity_x += (data.linear_acceleration.x + self.last_msg.linear_acceleration.x)/2.0*delta_t
-        self.velocity_y += (data.linear_acceleration.y + self.last_msg.linear_acceleration.y)/2.0*delta_t
-        self.velocity_z += (data.linear_acceleration.z + self.last_msg.linear_acceleration.z)/2.0*delta_t
+        self.velocity_x += (data.linear_acceleration.x + self.last_odom_msg.linear_acceleration.x)/2.0*delta_t
+        self.velocity_y += (data.linear_acceleration.y + self.last_odom_msg.linear_acceleration.y)/2.0*delta_t
+        self.velocity_z += (data.linear_acceleration.z + self.last_odom_msg.linear_acceleration.z)/2.0*delta_t
 
         self.position_x += (self.velocity_x+last_velocity[0])/2.0*delta_t
         self.position_y += (self.velocity_y+last_velocity[1])/2.0*delta_t
@@ -170,3 +174,16 @@ class TrapezoidalIntegrator(Integrator):
         self.velocity_x += -.001*math.sin(self.velocity_x/(1+1000*pow(self.velocity_x, 4)))
         self.velocity_y += -.001*math.sin(self.velocity_y/(1+1000*pow(self.velocity_y, 4)))
         self.velocity_z += -.001*math.sin(self.velocity_z/(1+1000*pow(self.velocity_z, 4)))
+
+    def drift_filter_v3(self, data):  # uses /cmd_vel to help guestimate the true velocity
+        if self.last_cmd_vel_msg is None:
+            return
+        cmd_velocities = self.last_cmd_vel_msg.linear
+        curve_coeff = 10.0
+        pull_coeff = 1.0
+        self.velocity_x += -pull_coeff*math.atan(curve_coeff*(self.velocity_x-cmd_velocities[0]))
+        self.velocity_y += -pull_coeff*math.atan(curve_coeff*(self.velocity_y-cmd_velocities[1]))
+        self.velocity_z += -pull_coeff*math.atan(curve_coeff*(self.velocity_z-cmd_velocities[2]))
+
+    def handle_vel_msg(self, data):
+        self.last_cmd_vel_msg = data

@@ -65,7 +65,16 @@ class FilterStack(object):
             self.seq += 1
 
 
-class ButterworthFilter(object):
+class BaseFilter(object):
+
+    def initialize(self):
+        pass
+
+    def filter(self, data):
+        pass
+
+
+class ButterworthFilter(BaseFilter):
 
     def initialize(self, order=4, cutoff_freq=.01, message_pack_size=2000, message_pack_update_size=1000):
         self.b, self.a = scipy.signal.butter(order, cutoff_freq)
@@ -76,36 +85,8 @@ class ButterworthFilter(object):
     def filter(self, data):
         data = self.prepare_data(data)
         output = self.apply_filter(data)
-        self.construct_and_send_messages(output)
 
     def prepare_data(self, data):
-        #data = self.average_orientation(data)
-        data = self.remove_gravity_from_data(data)
-        return data
-
-    def average_orientation(self, data):
-        average_width = 100
-        for index in range(average_width/2+1000, len(data)+average_width/2+1999):
-            data[index-average_width/2].orientation.x = sum([data_point.orientation.x for data_point in data[index-average_width/2:index+average_width/2]])/average_width
-            data[index-average_width/2].orientation.y = sum([data_point.orientation.y for data_point in data[index-average_width/2:index+average_width/2]])/average_width
-            data[index-average_width/2].orientation.z = sum([data_point.orientation.z for data_point in data[index-average_width/2:index+average_width/2]])/average_width
-            data[index-average_width/2].orientation.w = sum([data_point.orientation.w for data_point in data[index-average_width/2:index+average_width/2]])/average_width
-        return data
-
-    def remove_gravity_from_data(self, data):
-        for index in range(1000, len(data)-1):
-            data_point = data[index]
-            x1 = data_point.orientation.x
-            y1 = data_point.orientation.y
-            z1 = data_point.orientation.z
-            w1 = data_point.orientation.w
-            x = 9.81*2*(y1*w1-x1*z1)
-            y = 9.81*-2*(x1*w1+y1*z1)
-            z = 9.81*(x1*x1+y1*y1-z1*z1-w1*w1)
-            data[index].linear_acceleration.x = data_point.linear_acceleration.x+x
-            data[index].linear_acceleration.y = data_point.linear_acceleration.y+y
-            data[index].linear_acceleration.z = data_point.linear_acceleration.z+z
-            #print("%1.5f %1.5f %1.5f" % (abs(x), abs(y), abs(z)))
         return data
 
     def apply_filter(self, data):
@@ -140,7 +121,7 @@ class ButterworthFilter(object):
             self.seq += 1
 
 
-class MovingAverageFilter(object):
+class MovingAverageFilter(BaseFilter):
 
     def initialize(self, average_width=50, message_pack_update_size=100):
         self.seq = 0
@@ -150,7 +131,6 @@ class MovingAverageFilter(object):
     def filter(self, data):
         data = self.prepare_data(data)
         output = self.apply_filter(data)
-        self.construct_and_send_messages(output)
 
     def prepare_data(self, data):
         return data
