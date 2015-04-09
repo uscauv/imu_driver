@@ -7,26 +7,26 @@ class Integrator(object):
 
     def instantiate_values(self):
         self.t_secs_last = None
-        self.delta_t = 10
-        self.position_x = 0
-        self.position_y = 0
-        self.position_z = 0
-        self.position_w_x = 0
-        self.position_w_y = 0
-        self.position_w_z = 0
-        self.velocity_x = 0
-        self.velocity_y = 0
-        self.velocity_z = 0
-        self.velocity_w_x = 0  # angular velocity
-        self.velocity_w_y = 0
-        self.velocity_w_z = 0
-        self.acceleration_x = 0
-        self.acceleration_y = 0
-        self.acceleration_z = 0
-        self.orientation_x = 0
-        self.orientation_y = 0
-        self.orientation_z = 0
-        self.orientation_w = 0
+        self.delta_t = 0.0
+        self.position_x = 0.0
+        self.position_y = 0.0
+        self.position_z = 0.0
+        self.position_w_x = 0.0
+        self.position_w_y = 0.0
+        self.position_w_z = 0.0
+        self.velocity_x = 0.0
+        self.velocity_y = 0.0
+        self.velocity_z = 0.0
+        self.velocity_w_x = 0.0  # angular velocity
+        self.velocity_w_y = 0.0
+        self.velocity_w_z = 0.0
+        self.acceleration_x = 0.0
+        self.acceleration_y = 0.0
+        self.acceleration_z = 0.0
+        self.orientation_x = 0.0
+        self.orientation_y = 0.0
+        self.orientation_z = 0.0
+        self.orientation_w = 0.0
 
     def update_values(self):
         pass
@@ -75,42 +75,6 @@ class BasicIntegrator(Integrator):
         self.position_w_x += self.velocity_w_x*self.delta_t
         self.position_w_y += self.velocity_w_y*self.delta_t
         self.position_w_z += self.velocity_w_z*self.delta_t
-
-
-class TrapezoidalIntegrator(Integrator):
-
-    def instantiate_values(self):
-        super(TrapezoidalIntegrator, self).instantiate_values()
-        self.last_msg = None
-
-    def update_values(self, data):
-        if(self.last_msg is None):
-            self.last_msg = data
-            return
-        self.integrate(data)
-        self.drift_filter_v2(data)
-        self.last_msg = data
-
-    def integrate(self, data):
-        delta_t = 1.0*data.header.stamp.secs-1.0*self.last_msg.header.stamp.secs+1.0*(data.header.stamp.nsecs-self.last_msg.header.stamp.nsecs)*pow(10, -9)
-        last_velocity = (self.velocity_x, self.velocity_y, self.velocity_z)
-        self.velocity_x += (data.linear_acceleration.x + self.last_msg.linear_acceleration.x)/2.0*delta_t
-        self.velocity_y += (data.linear_acceleration.y + self.last_msg.linear_acceleration.y)/2.0*delta_t
-        self.velocity_z += (data.linear_acceleration.z + self.last_msg.linear_acceleration.z)/2.0*delta_t
-
-        self.position_x += (self.velocity_x+last_velocity[0])/2.0*delta_t
-        self.position_y += (self.velocity_y+last_velocity[1])/2.0*delta_t
-        self.position_z += (self.velocity_z+last_velocity[2])/2.0*delta_t
-
-    def drift_filter(self, data):
-        self.velocity_x += -.001*abs(self.velocity_x)*math.sin(self.velocity_x*2*math.pi/.2)
-        self.velocity_y += -.001*abs(self.velocity_y)*math.sin(self.velocity_y*2*math.pi/.2)
-        self.velocity_z += -.001*abs(self.velocity_z)*math.sin(self.velocity_z*2*math.pi/.2)
-
-    def drift_filter_v2(self, data):
-        self.velocity_x += -.001*math.sin(self.velocity_x/(1+1000*pow(self.velocity_x, 4)))
-        self.velocity_y += -.001*math.sin(self.velocity_y/(1+1000*pow(self.velocity_y, 4)))
-        self.velocity_z += -.001*math.sin(self.velocity_z/(1+1000*pow(self.velocity_z, 4)))
 
 
 class LessBasicIntegrator(Integrator):
@@ -170,3 +134,39 @@ class LessBasicIntegrator(Integrator):
         self.position_w_x += self.velocity_w_x*self.delta_t
         self.position_w_y += self.velocity_w_y*self.delta_t
         self.position_w_z += self.velocity_w_z*self.delta_t
+
+
+class TrapezoidalIntegrator(Integrator):
+
+    def instantiate_values(self):
+        super(TrapezoidalIntegrator, self).instantiate_values()
+        self.last_msg = None
+
+    def update_values(self, data):
+        if(self.last_msg is None):
+            self.last_msg = data
+            return
+        self.integrate(data)
+        self.drift_filter_v2(data)
+        self.last_msg = data
+
+    def integrate(self, data):
+        delta_t = 1.0*data.header.stamp.secs-1.0*self.last_msg.header.stamp.secs+1.0*(data.header.stamp.nsecs-self.last_msg.header.stamp.nsecs)*pow(10, -9)
+        last_velocity = (self.velocity_x, self.velocity_y, self.velocity_z)
+        self.velocity_x += (data.linear_acceleration.x + self.last_msg.linear_acceleration.x)/2.0*delta_t
+        self.velocity_y += (data.linear_acceleration.y + self.last_msg.linear_acceleration.y)/2.0*delta_t
+        self.velocity_z += (data.linear_acceleration.z + self.last_msg.linear_acceleration.z)/2.0*delta_t
+
+        self.position_x += (self.velocity_x+last_velocity[0])/2.0*delta_t
+        self.position_y += (self.velocity_y+last_velocity[1])/2.0*delta_t
+        self.position_z += (self.velocity_z+last_velocity[2])/2.0*delta_t
+
+    def drift_filter(self, data):
+        self.velocity_x += -.001*abs(self.velocity_x)*math.sin(self.velocity_x*2*math.pi/.2)
+        self.velocity_y += -.001*abs(self.velocity_y)*math.sin(self.velocity_y*2*math.pi/.2)
+        self.velocity_z += -.001*abs(self.velocity_z)*math.sin(self.velocity_z*2*math.pi/.2)
+
+    def drift_filter_v2(self, data):
+        self.velocity_x += -.001*math.sin(self.velocity_x/(1+1000*pow(self.velocity_x, 4)))
+        self.velocity_y += -.001*math.sin(self.velocity_y/(1+1000*pow(self.velocity_y, 4)))
+        self.velocity_z += -.001*math.sin(self.velocity_z/(1+1000*pow(self.velocity_z, 4)))

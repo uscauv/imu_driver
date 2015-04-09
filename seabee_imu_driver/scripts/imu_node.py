@@ -13,11 +13,11 @@ class Imu(object):
     def launch(self):
         self.seq = 0
         rospy.init_node("Imu")
-        self.integrator = seabee_imu_integrator.TrapezoidalIntegrator()
-        self.integrator.instantiate_values()
-        self.pub = rospy.Publisher("odom", nav_msgs.msg.Odometry, queue_size=50)
         rospy.Service("reset_odom", SeabeeResetOdom, self.reset_handle)
         rospy.Subscriber("nav_filtered_signals/filter_stack", sensor_msgs.msg.Imu, self.callback)
+        self.pub = rospy.Publisher("odom", nav_msgs.msg.Odometry, queue_size=50)
+        self.integrator = seabee_imu_integrator.TrapezoidalIntegrator()
+        self.integrator.instantiate_values()
         rospy.spin()
 
     def callback(self, data):

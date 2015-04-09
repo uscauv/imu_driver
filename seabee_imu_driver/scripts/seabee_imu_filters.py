@@ -9,28 +9,24 @@ import copy
 class FilterStack(object):
 
     def initialize(self):
-        self.filter_width = 1000
+        filter_width = 50
+        message_pack_update_size = 100
+        initial_message_pack_size = 200
         self.logger = Logger()
-        self.logger.initialize()
-        self.filters = self.initialize_filters(filter_width=self.filter_width)
+        self.logger.initialize(initial_message_pack_size=initial_message_pack_size, message_pack_update_size=message_pack_update_size)
+        self.filters = self.initialize_filters(filter_width=filter_width, message_pack_update_size=message_pack_update_size)
         self.pub = rospy.Publisher("nav_filtered_signals/filter_stack", sensor_msgs.msg.Imu, queue_size=2000)
         self.seq = 0
         while not rospy.is_shutdown():
             if(self.logger.length() != 0):
                 self.filter(self.logger.get_next_message_group())
-            rospy.sleep(1)
+            rospy.sleep(.1)
 
-    def initialize_filters(self, filter_width):
+    def initialize_filters(self, filter_width, message_pack_update_size):
         filter_list = []
-        butterworth_filter = ButterworthFilter()
-        butterworth_filter.initialize()
         moving_average_filter = MovingAverageFilter()
-        moving_average_filter.initialize(filter_width)
-
+        moving_average_filter.initialize(average_width=filter_width, message_pack_update_size=message_pack_update_size)
         filter_list.append(moving_average_filter)
-        #fa
-        #filter_list.append(butterworth_filter)
-
         return filter_list
 
     def filter(self, data):
@@ -71,19 +67,11 @@ class FilterStack(object):
 
 class ButterworthFilter(object):
 
-    def initialize(self, order=4, cutoff_freq=.01, stand_alone=False, message_pack_size=2000, message_pack_update_size=1000):
+    def initialize(self, order=4, cutoff_freq=.01, message_pack_size=2000, message_pack_update_size=1000):
         self.b, self.a = scipy.signal.butter(order, cutoff_freq)
         self.message_pack_size = message_pack_size
         self.message_pack_update_size = message_pack_update_size
         self.seq = 0
-        self.pub = rospy.Publisher("nav_filtered_signals/butterworth", sensor_msgs.msg.Imu, queue_size=2000)
-        if stand_alone:
-            self.logger = Logger()
-            self.logger.initialize()
-            while not rospy.is_shutdown():
-                if(self.logger.length() != 0):
-                    self.filter(self.logger.get_next_message_group(), manual_data_feed)
-                rospy.sleep(1)
 
     def filter(self, data):
         data = self.prepare_data(data)
@@ -154,61 +142,38 @@ class ButterworthFilter(object):
 
 class MovingAverageFilter(object):
 
-    def initialize(self, average_width=50, stand_alone=False):
-        self.logger = Logger()
-        self.logger.initialize()
+    def initialize(self, average_width=50, message_pack_update_size=100):
         self.seq = 0
-        self.pub = rospy.Publisher("nav_filtered_signals/moving_average", sensor_msgs.msg.Imu, queue_size=2000)
-        if stand_alone:
-            while not rospy.is_shutdown():
-                if(self.logger.length() != 0):
-                    self.filter(self.logger.get_next_message_group())
-                rospy.sleep(1)
+        self.average_width = average_width
+        self.message_pack_update_size = message_pack_update_size
 
-    def filter(self, data, feed_to_filter):
+    def filter(self, data):
         data = self.prepare_data(data)
         output = self.apply_filter(data)
         self.construct_and_send_messages(output)
-        if(feed_to_filter is not None):
-            self.data_to_pass_on.append(output)
-            if(self.seq > 3):
-                feed_to_filter.filter(self.data_to_pass_on)
-                self.data_to_pass_on = self.data_to_pass_on[500:2000]
 
     def prepare_data(self, data):
-        data = self.remove_gravity_from_data(data)
-        return data
-
-    def remove_gravity_from_data(self, data):
-        for index in range(1000, len(data)-1):
-            data_point = data[index]
-            x1 = data_point.orientation.x
-            y1 = data_point.orientation.y
-            z1 = data_point.orientation.z
-            w1 = data_point.orientation.w
-            x = 9.81*2*(y1*w1-x1*z1)
-            y = 9.81*-2*(x1*w1+y1*z1)
-            z = 9.81*(x1*x1+y1*y1-z1*z1-w1*w1)
-            data[index].linear_acceleration.x = data_point.linear_acceleration.x+x
-            data[index].linear_acceleration.y = data_point.linear_acceleration.y+y
-            data[index].linear_acceleration.z = data_point.linear_acceleration.z+z
         return data
 
     def apply_filter(self, data):
+        num_data_points = len(data)
+        midpoint_of_data = num_data_points/2
+        filter_width = self.average_width  # the number of points we average at a time
+        num_points_to_filter = self.message_pack_update_size
         x = []
         y = []
         z = []
-        for index in range(50, 150):
-            x_avg = sum(point.linear_acceleration.x for point in data[index-50:index+50])/100
-            y_avg = sum(point.linear_acceleration.y for point in data[index-50:index+50])/100
-            z_avg = sum(point.linear_acceleration.z for point in data[index-50:index+50])/100
+        for index in range(midpoint_of_data-num_points_to_filter/2, midpoint_of_data+num_points_to_filter/2):
+            x_avg = sum(point.linear_acceleration.x for point in data[index-self.average_width/2:index+self.average_width/2])/(self.average_width)
+            y_avg = sum(point.linear_acceleration.y for point in data[index-self.average_width/2:index+self.average_width/2])/(self.average_width)
+            z_avg = sum(point.linear_acceleration.z for point in data[index-self.average_width/2:index+self.average_width/2])/(self.average_width)
             x.append(x_avg)
             y.append(y_avg)
             z.append(z_avg)
-        for index in range(50, 150):
-            data[index].linear_acceleration.x = x[index-50] if (x[index-50] > .05 or x[index-50] < -.05) else 0
-            data[index].linear_acceleration.y = y[index-50] if (abs(y[index-50]) > .02) else 0
-            data[index].linear_acceleration.z = z[index-50] if (abs(z[index-50]) > .02) else 0
+        for index in range(midpoint_of_data-num_points_to_filter/2, midpoint_of_data+num_points_to_filter/2):
+            data[index].linear_acceleration.x = x[index-(midpoint_of_data-num_points_to_filter/2)] #if (x[index-(len(data)/2-self.average_width)] > .05 or x[index-(len(data)/2-self.average_width)] < -.05) else 0
+            data[index].linear_acceleration.y = y[index-(midpoint_of_data-num_points_to_filter/2)] #if (abs(y[index-(len(data)/2-self.average_width)]) > .02) else 0
+            data[index].linear_acceleration.z = z[index-(midpoint_of_data-num_points_to_filter/2)] #if (abs(z[index-(len(data)/2-self.average_width)]) > .02) else 0
         return data
 
     def construct_and_send_messages(self, data):
