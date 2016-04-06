@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import rospy
+import tf
 import sensor_msgs.msg
 import scipy.signal
 import copy
@@ -61,6 +62,11 @@ class FilterStack(object):
         for data_point in data[50:150]:
             data_point.header.frame_id = "felter"
             data_point.header.seq = self.seq
+            euler = tf.transformations.euler_from_quaternion((data_point.orientation.x, data_point.orientation.y, data_point.orientation.z, data_point.orientation.w))
+            data_point.orientation.x = euler[0]
+            data_point.orientation.y = euler[1]
+            data_point.orientation.z = euler[2]
+            data_point.orientation.w = 0
             self.pub.publish(data_point)
             self.seq += 1
 
