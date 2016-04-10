@@ -10,18 +10,10 @@ import copy
 class FilterStack(object):
 
     def initialize(self):
-        filter_width = 50
-        message_pack_update_size = 100
-        initial_message_pack_size = 200
-        self.logger = Logger()
-        self.logger.initialize(initial_message_pack_size=initial_message_pack_size, message_pack_update_size=message_pack_update_size)
-        self.filters = self.initialize_filters(filter_width=filter_width, message_pack_update_size=message_pack_update_size)
+        self.message_holder = []
         self.pub = rospy.Publisher("nav_filtered_signals/filter_stack", sensor_msgs.msg.Imu, queue_size=2000)
-        self.seq = 0
-        while not rospy.is_shutdown():
-            if(self.logger.length() != 0):
-                self.filter(self.logger.get_next_message_group())
-            rospy.sleep(.1)
+        rospy.Subscriber("/imu/data", sensor_msgs.msg.Imu, self.log_message)
+        rospy.spin()
 
     def initialize_filters(self, filter_width, message_pack_update_size):
         filter_list = []
@@ -29,6 +21,33 @@ class FilterStack(object):
         moving_average_filter.initialize(average_width=filter_width, message_pack_update_size=message_pack_update_size)
         filter_list.append(moving_average_filter)
         return filter_list
+
+    def log_message(self, data):
+        data = self.remove_gravity_from_data([data])[0]
+        self.message_holder.append(data)
+        if len(self.message_holder)<50:
+            return
+        self.message_holder.pop(0)
+        old_x = self.message_holder[25].linear_acceleration.x 
+        old_y = self.message_holder[25].linear_acceleration.y
+        old_z = self.message_holder[25].linear_acceleration.z
+        running_total_x = 0
+        running_total_y = 0
+        running_total_z = 0
+        for msg in self.message_holder:
+            running_total_x += msg.linear_acceleration.x 
+            running_total_y += msg.linear_acceleration.y 
+            running_total_z += msg.linear_acceleration.z 
+        running_total_x = running_total_x/len(self.message_holder)
+        running_total_y = running_total_y/len(self.message_holder)
+        running_total_z = running_total_z/len(self.message_holder)
+        self.message_holder[25].linear_acceleration.x = running_total_x
+        self.message_holder[25].linear_acceleration.y = running_total_y
+        self.message_holder[25].linear_acceleration.z = running_total_z
+        self.pub.publish(self.message_holder[25])
+        self.message_holder[25].linear_acceleration.x = old_x
+        self.message_holder[25].linear_acceleration.y = old_y
+        self.message_holder[25].linear_acceleration.z = old_z
 
     def filter(self, data):
         prepared_data = self.prepare_data(data)
@@ -51,6 +70,11 @@ class FilterStack(object):
             data_point.linear_acceleration.x = data_point.linear_acceleration.x+x
             data_point.linear_acceleration.y = data_point.linear_acceleration.y+y
             data_point.linear_acceleration.z = data_point.linear_acceleration.z+z
+            euler = tf.transformations.euler_from_quaternion((data_point.orientation.x, data_point.orientation.y, data_point.orientation.z, data_point.orientation.w))
+            data_point.orientation.x = euler[0]
+            data_point.orientation.y = euler[1]
+            data_point.orientation.z = euler[2]
+            data_point.orientation.w = 0
         return data
 
     def apply_filters(self, data):
@@ -62,11 +86,6 @@ class FilterStack(object):
         for data_point in data[50:150]:
             data_point.header.frame_id = "felter"
             data_point.header.seq = self.seq
-            euler = tf.transformations.euler_from_quaternion((data_point.orientation.x, data_point.orientation.y, data_point.orientation.z, data_point.orientation.w))
-            data_point.orientation.x = euler[0]
-            data_point.orientation.y = euler[1]
-            data_point.orientation.z = euler[2]
-            data_point.orientation.w = 0
             self.pub.publish(data_point)
             self.seq += 1
 
@@ -78,54 +97,6 @@ class BaseFilter(object):
 
     def filter(self, data):
         pass
-
-
-class ButterworthFilter(BaseFilter):
-
-    def initialize(self, order=4, cutoff_freq=.01, message_pack_size=2000, message_pack_update_size=1000):
-        self.b, self.a = scipy.signal.butter(order, cutoff_freq)
-        self.message_pack_size = message_pack_size
-        self.message_pack_update_size = message_pack_update_size
-        self.seq = 0
-
-    def filter(self, data):
-        data = self.prepare_data(data)
-        output = self.apply_filter(data)
-
-    def prepare_data(self, data):
-        return data
-
-    def apply_filter(self, data):
-        x = []
-        y = []
-        z = []
-        for data_point in data:
-            x.append(data_point.linear_acceleration.x)
-            y.append(data_point.linear_acceleration.y)
-            z.append(data_point.linear_acceleration.z)
-        x_output = scipy.signal.lfilter(self.b, self.a, x)
-        y_output = scipy.signal.lfilter(self.b, self.a, y)
-        z_output = scipy.signal.lfilter(self.b, self.a, z)
-        for index in range(0, len(data)):
-            data[index].linear_acceleration.x = x_output[index]
-            data[index].linear_acceleration.y = y_output[index]
-            data[index].linear_acceleration.z = z_output[index]
-        return data
-
-    def construct_and_send_messages(self, data):
-        for index in range(500, 1500):
-            data_point = data[index]
-            msg = sensor_msgs.msg.Imu()
-            msg.header.seq = self.seq
-            msg.header.stamp = data_point[3]
-            msg.header.frame_id = "filter"
-            msg.linear_acceleration.x = data_point[0]  # if (abs(data_point[0]) > .02) else 0
-            msg.linear_acceleration.y = data_point[1]
-            msg.linear_acceleration.z = data_point[2]
-            print(data_point[0])
-            self.pub.publish(msg)
-            self.seq += 1
-
 
 class MovingAverageFilter(BaseFilter):
 
@@ -185,7 +156,6 @@ class Logger(object):
         self.initial_message_pack_size = initial_message_pack_size
         self.message_pack_update_size = message_pack_update_size
         self.first_iteration = True
-        rospy.Subscriber("/imu/data", sensor_msgs.msg.Imu, self.log_message)
 
     def log_message(self, data):
         self.current_message_pack.append(data)
