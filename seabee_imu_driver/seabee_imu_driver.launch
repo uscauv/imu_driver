@@ -2,7 +2,7 @@
 	<node name="seabee_imu_filters" pkg="seabee_imu_driver" type="seabee_imu_filters.py" />
 	<node name="imu_node" pkg="seabee_imu_driver" type="imu_node.py" />
 	<node name="xsens_node" pkg="xsens_driver" type="mtnode.py">
-		<param name="device" value=""/>
+		<param name="device" value="/dev/seabee/imu"/>
 		<param name="baudrate" value="921600"/>
 	</node>
 </launch>

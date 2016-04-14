@@ -71,9 +71,9 @@ class FilterStack(object):
             data_point.linear_acceleration.y = data_point.linear_acceleration.y+y
             data_point.linear_acceleration.z = data_point.linear_acceleration.z+z
             euler = tf.transformations.euler_from_quaternion((data_point.orientation.x, data_point.orientation.y, data_point.orientation.z, data_point.orientation.w))
-            data_point.orientation.x = euler[0]+.43
-            data_point.orientation.y = euler[1]-.53
-            data_point.orientation.z = euler[2]+2.1
+            data_point.orientation.x = euler[0]-.55
+            data_point.orientation.y = euler[1]+.1
+            data_point.orientation.z = euler[2]+2.58
             data_point.orientation.w = 0
         return data
 
